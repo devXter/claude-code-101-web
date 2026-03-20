@@ -34,8 +34,7 @@ const FadeIn = ({ children, delay = 0, direction = "up", className = "" }) => {
   return (
     <div ref={ref} className={className} style={{
       opacity: inView ? 1 : 0, transform: inView ? "none" : dirs[direction],
-      transition: `all 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s`,
-      height: "100%"
+      transition: `all 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s`
     }}>{children}</div>
   );
 };
@@ -143,7 +142,7 @@ const SectionTitle = ({ icon, children, sub }) => (
 
 const Card = ({ children, accent, delay = 0, style = {} }) => (
   <FadeIn delay={delay}>
-    <div style={{ background: C.card, borderRadius: 12, padding: 24, borderLeft: accent ? `4px solid ${accent}` : "none", position: "relative", overflow: "hidden", height: "100%", ...style }}>
+    <div style={{ background: C.card, borderRadius: 12, padding: 24, borderLeft: accent ? `4px solid ${accent}` : "none", position: "relative", overflow: "hidden", ...style }}>
       {children}
     </div>
   </FadeIn>
@@ -237,6 +236,8 @@ export default function App() {
         .nav-dot:hover { transform: scale(1.5); }
         .card-hover { transition: all 0.3s ease; }
         .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+        .grid-stretch > * { height: 100%; }
+        .grid-stretch > * > * { height: 100%; }
       `}</style>
 
       {/* Navigation dots */}
@@ -303,7 +304,7 @@ export default function App() {
         <SectionTitle icon="⌨️" sub="Una herramienta de desarrollo agéntico. Lee tu codebase completo, edita archivos, ejecuta comandos e integra con tus herramientas de desarrollo. Disponible en terminal, IDE, desktop app y browser.">
           ¿Qué es Claude Code?
         </SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, marginBottom: 48 }}>
+        <div className="grid-stretch" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, marginBottom: 48 }}>
           {[{ icon: "🔍", title: "Recopilar Contexto", desc: "Lee archivos, busca en el repo, analiza dependencias", color: C.teal },
             { icon: "⚡", title: "Ejecutar Acción", desc: "Edita código, ejecuta comandos, crea archivos", color: C.accent },
             { icon: "✓", title: "Verificar Resultados", desc: "Corre tests, valida builds, verifica el output", color: C.success }
@@ -503,7 +504,7 @@ Fix GitHub issue: $ARGUMENTS
         <SectionTitle icon="🔌" sub="Estándar abierto (Linux Foundation) que conecta Claude con servicios externos. 300+ integraciones.">
           MCP — Model Context Protocol
         </SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
+        <div className="grid-stretch" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
           {[{ cat: "Version Control", items: "GitHub, GitLab, Git", color: C.primary },
             { cat: "Bases de Datos", items: "PostgreSQL, MongoDB, Redis", color: C.teal },
             { cat: "Project Mgmt", items: "Jira, Linear, Sentry", color: C.accent },
@@ -559,7 +560,7 @@ Fix GitHub issue: $ARGUMENTS
       {/* ═══ ADVANCED FEATURES ═══ */}
       <Section id="features">
         <SectionTitle icon="🚀" sub="">Features Avanzados</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
+        <div className="grid-stretch" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
           {[{ title: "Plan Mode", desc: "Claude crea un plan detallado que puedes revisar antes de codificar.", color: C.primary },
             { title: "Background Agents", desc: "Envía tareas al background con Ctrl+B y sigue trabajando.", color: C.teal },
             { title: "Agent Teams", desc: "Múltiples instancias en paralelo en diferentes partes del proyecto.", color: C.accent },
@@ -845,7 +846,7 @@ Fix GitHub issue: $ARGUMENTS
         <SectionTitle icon="🎯" sub="ContactBook App — Gestión de contactos con React + NestJS. El foco es cómo Claude Code con sus extensiones potencia el desarrollo.">
           Live Demo: ContactBook App
         </SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
+        <div className="grid-stretch" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 32 }}>
           {[{ phase: "Fase 1", title: "Proyecto + CLAUDE.md", time: "3 min", desc: "Mostrar extensiones configuradas", color: C.primary },
             { phase: "Fase 2", title: "Backend Hexagonal", time: "10 min", desc: "NestJS + Plan Mode + Hook Prettier", color: C.teal },
             { phase: "Fase 3", title: "Tests BDD con Skill", time: "5 min", desc: "/test-bdd ContactsService", color: C.purple },
