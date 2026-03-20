@@ -94,7 +94,179 @@ const Counter = ({ end, suffix = '', duration = 2000 }) => {
   );
 };
 
-const CodeBlock = ({ children, delay = 0 }) => (
+const highlightCode = (text, lang) => {
+  if (typeof text !== 'string') return text;
+
+  const S = {
+    kw: C.teal,
+    flag: C.accent,
+    prompt: C.success,
+    comment: C.muted,
+    num: C.purple,
+    str: '#A5D6A7',
+    def: '#e2e8f0',
+  };
+
+  const span = (content, color, extra = {}) => (
+    <span key={Math.random()} style={{ color, ...extra }}>{content}</span>
+  );
+
+  const highlightBashLine = (line) => {
+    if (line.startsWith('#')) return [span(line, S.comment)];
+
+    const fragments = [];
+    let rest = line;
+
+    if (rest.startsWith('$')) {
+      fragments.push(span('$', S.prompt));
+      rest = rest.slice(1);
+    }
+
+    const bashKw = /\b(cd|npm|npx|git|gh|echo|mkdir|cat|claude|node|curl)\b/g;
+    const bashStr = /(["'])((?:(?!\1).)*)\1/g;
+    const bashFlag = /\s(--[\w-]+|-[a-zA-Z])\b/g;
+    const bashOp = /(&&|\|\||\|(?!\|)|>>|>)/g;
+
+    const tokens = [];
+    const combinedRe = new RegExp(
+      `(["'])((?:(?!\\1).)*)\\1|\\b(cd|npm|npx|git|gh|echo|mkdir|cat|claude|node|curl)\\b|(\\s)(--[\\w-]+|-[a-zA-Z])\\b|(&&|\\|\\||\\|(?!\\|)|>>|>)`,
+      'g'
+    );
+
+    let lastIdx = 0;
+    let m;
+    while ((m = combinedRe.exec(rest)) !== null) {
+      if (m.index > lastIdx) {
+        tokens.push(span(rest.slice(lastIdx, m.index), S.def));
+      }
+      if (m[1] !== undefined) {
+        tokens.push(span(m[0], S.str));
+      } else if (m[3] !== undefined) {
+        tokens.push(span(m[3], S.kw));
+      } else if (m[5] !== undefined) {
+        tokens.push(span(m[4], S.def));
+        tokens.push(span(m[5], S.flag));
+      } else if (m[6] !== undefined) {
+        tokens.push(span(m[6], S.flag));
+      }
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < rest.length) {
+      tokens.push(span(rest.slice(lastIdx), S.def));
+    }
+
+    return [...fragments, ...tokens];
+  };
+
+  const highlightJsonLine = (line) => {
+    const tokens = [];
+    const jsonRe = /(\/\/.*$)|("(?:[^"\\]|\\.)*")\s*(:)|("(?:[^"\\]|\\.)*")|(\b\d+(?:\.\d+)?\b)|(\btrue\b|\bfalse\b|\bnull\b)/g;
+    let lastIdx = 0;
+    let m;
+    while ((m = jsonRe.exec(line)) !== null) {
+      if (m.index > lastIdx) {
+        tokens.push(span(line.slice(lastIdx, m.index), S.def));
+      }
+      if (m[1] !== undefined) {
+        tokens.push(span(m[1], S.comment));
+      } else if (m[2] !== undefined) {
+        tokens.push(span(m[2] + ':', S.flag));
+      } else if (m[4] !== undefined) {
+        tokens.push(span(m[4], S.str));
+      } else if (m[5] !== undefined) {
+        tokens.push(span(m[5], S.num));
+      } else if (m[6] !== undefined) {
+        tokens.push(span(m[6], S.kw));
+      }
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < line.length) {
+      tokens.push(span(line.slice(lastIdx), S.def));
+    }
+    return tokens;
+  };
+
+  const highlightMarkdownLine = (line) => {
+    if (/^#{1,6}\s/.test(line)) {
+      return [span(line, S.flag, { fontWeight: 700 })];
+    }
+    if (/^-\s/.test(line)) {
+      const tokens = [span('- ', C.primary)];
+      const rest = line.slice(2);
+      const inlineTokens = [];
+      const codeRe = /`([^`]+)`/g;
+      let lastIdx = 0;
+      let m;
+      while ((m = codeRe.exec(rest)) !== null) {
+        if (m.index > lastIdx) inlineTokens.push(span(rest.slice(lastIdx, m.index), S.def));
+        inlineTokens.push(span(m[0], S.kw));
+        lastIdx = m.index + m[0].length;
+      }
+      if (lastIdx < rest.length) inlineTokens.push(span(rest.slice(lastIdx), S.def));
+      return [...tokens, ...inlineTokens];
+    }
+    const tokens = [];
+    const codeRe = /`([^`]+)`/g;
+    let lastIdx = 0;
+    let m;
+    while ((m = codeRe.exec(line)) !== null) {
+      if (m.index > lastIdx) tokens.push(span(line.slice(lastIdx, m.index), S.def));
+      tokens.push(span(m[0], S.kw));
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < line.length) tokens.push(span(line.slice(lastIdx), S.def));
+    if (tokens.length === 0) tokens.push(span(line, S.def));
+    return tokens;
+  };
+
+  const highlightYamlMdLine = (line, isYaml) => {
+    if (line === '---') return [span(line, S.comment)];
+    if (isYaml) {
+      const kvMatch = line.match(/^(\s*)([\w-]+)(:)(.*)/);
+      if (kvMatch) {
+        const tokens = [];
+        if (kvMatch[1]) tokens.push(span(kvMatch[1], S.def));
+        tokens.push(span(kvMatch[2], S.kw));
+        tokens.push(span(kvMatch[3], S.def));
+        if (kvMatch[4]) tokens.push(span(kvMatch[4], S.str));
+        return tokens;
+      }
+      return [span(line, S.def)];
+    }
+    return highlightMarkdownLine(line);
+  };
+
+  const lines = text.split('\n');
+
+  if (lang === 'yaml-md') {
+    let delimiterCount = 0;
+    const result = [];
+    lines.forEach((line, i) => {
+      if (line === '---') delimiterCount++;
+      const isYaml = delimiterCount < 2 || line === '---';
+      if (i > 0) result.push(<br key={`br-${i}`} />);
+      result.push(...highlightYamlMdLine(line, isYaml && delimiterCount >= 1));
+    });
+    return result;
+  }
+
+  const lineHighlighter = {
+    bash: highlightBashLine,
+    json: highlightJsonLine,
+    markdown: highlightMarkdownLine,
+  }[lang];
+
+  if (!lineHighlighter) return text;
+
+  const result = [];
+  lines.forEach((line, i) => {
+    if (i > 0) result.push(<br key={`br-${i}`} />);
+    result.push(...lineHighlighter(line));
+  });
+  return result;
+};
+
+const CodeBlock = ({ children, delay = 0, lang }) => (
   <FadeIn delay={delay}>
     <div
       style={{
@@ -129,13 +301,13 @@ const CodeBlock = ({ children, delay = 0 }) => (
           color: '#e2e8f0',
         }}
       >
-        <code>{children}</code>
+        <code>{lang && typeof children === 'string' ? highlightCode(children, lang) : children}</code>
       </pre>
     </div>
   </FadeIn>
 );
 
-const CopyBlock = ({ children, label }) => {
+const CopyBlock = ({ children, label, lang }) => {
   const [copied, setCopied] = useState(false);
   const textRef = useRef(null);
   const copy = () => {
@@ -240,7 +412,7 @@ const CopyBlock = ({ children, label }) => {
             color: '#e2e8f0',
           }}
         >
-          <code>{children}</code>
+          <code>{lang && typeof children === 'string' ? highlightCode(children, lang) : children}</code>
         </pre>
       </div>
     </div>
@@ -642,7 +814,7 @@ export default function App() {
         />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <FadeIn>
-            <Badge>Workshop · JavaScript Chapter · Accenture Chile</Badge>
+            <Badge>Workshop · Accenture Chile</Badge>
           </FadeIn>
           <FadeIn delay={0.2}>
             <h1
@@ -1106,7 +1278,7 @@ export default function App() {
           CLAUDE.md — El Cerebro del Proyecto
         </SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-          <CodeBlock>{`# Mi Proyecto Angular
+          <CodeBlock lang="markdown">{`# Mi Proyecto Angular
 
 ## Tech Stack
 - Frontend: Angular 20, Signals
@@ -1164,7 +1336,7 @@ export default function App() {
           Skills — Comportamientos Enseñables
         </SectionTitle>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-          <CodeBlock>{`---
+          <CodeBlock lang="yaml-md">{`---
 name: fix-issue
 description: Fix a GitHub issue
 argument-hint: [issue-number]
@@ -1234,7 +1406,7 @@ Fix GitHub issue: $ARGUMENTS
             </Card>
           ))}
         </div>
-        <CodeBlock delay={0.5}>{`$ claude mcp add github npx @modelcontextprotocol/server-github`}</CodeBlock>
+        <CodeBlock delay={0.5} lang="bash">{`$ claude mcp add github npx @modelcontextprotocol/server-github`}</CodeBlock>
       </Section>
       <Divider />
 
@@ -1276,7 +1448,7 @@ Fix GitHub issue: $ARGUMENTS
             Ejemplo: Auto-format + bloquear DROP TABLE
           </h3>
         </FadeIn>
-        <CodeBlock delay={0.3}>{`{
+        <CodeBlock delay={0.3} lang="json">{`{
   "hooks": {
     "PostToolUse": [{
       "matcher": "Edit|Write",
@@ -1985,7 +2157,7 @@ Fix GitHub issue: $ARGUMENTS
         <FadeIn delay={0.7}>
           <div style={{ textAlign: 'center', marginTop: 40, padding: 24, background: C.highlight, borderRadius: 12 }}>
             <p style={{ color: C.accent, fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
-              💡 Todo lo que configuramos se podría empaquetar en un Plugin e instalarlo en todos los repos del Chapter
+              💡 Todo lo que configuramos se podría empaquetar en un Plugin e instalarlo en todos los repos del proyecto
               con un solo comando.
             </p>
             <p style={{ color: C.muted, fontSize: 13 }}>
@@ -2023,7 +2195,7 @@ Fix GitHub issue: $ARGUMENTS
         <FadeIn>
           <h2 style={{ color: C.accent, fontSize: 20, fontWeight: 700, marginBottom: 24 }}>Requisitos Previos</h2>
         </FadeIn>
-        <CopyBlock label="Verificar instalación">{`node --version    # >= 18
+        <CopyBlock label="Verificar instalación" lang="bash">{`node --version    # >= 18
 npm --version     # >= 9
 git --version
 gh --version      # GitHub CLI
@@ -2031,8 +2203,8 @@ claude --version  # Claude Code CLI`}</CopyBlock>
 
         {/* Step 1 */}
         <GuideStep number="1" title="Crear el Repositorio" badge={{ icon: '🖥️', label: 'Manual' }} badgeColor={C.muted}>
-          <CopyBlock label="Terminal">{`gh repo create contactbook-demo-v2 --public --clone
-cd contactbook-demo-v2`}</CopyBlock>
+          <CopyBlock label="Terminal" lang="bash">{`gh repo create contactbook-demo --public --clone
+cd contactbook-demo`}</CopyBlock>
         </GuideStep>
 
         {/* Step 2 */}
@@ -2043,16 +2215,16 @@ cd contactbook-demo-v2`}</CopyBlock>
           badgeColor={C.muted}
         >
           <p style={{ color: C.muted, fontSize: 14, marginBottom: 16 }}>Backend (NestJS):</p>
-          <CopyBlock>{`mkdir -p backend frontend
+          <CopyBlock lang="bash">{`mkdir -p backend frontend
 cd backend && npx @nestjs/cli new . --package-manager npm --skip-git && cd ..`}</CopyBlock>
           <p style={{ color: C.muted, fontSize: 14, marginBottom: 16 }}>Frontend (React + Build Tool + Tailwind):</p>
-          <CopyBlock>
+          <CopyBlock lang="bash">
             {[CMDS.scaffold, '', `cd frontend`, CMDS.twInstall, '', CMDS.viteConfig, '', CMDS.cssImport, `cd ..`].join(
               '\n',
             )}
           </CopyBlock>
           <p style={{ color: C.muted, fontSize: 14, marginBottom: 16 }}>Dependencias y config:</p>
-          <CopyBlock>{`cd backend
+          <CopyBlock lang="bash">{`cd backend
 npm install class-validator class-transformer @nestjs/mapped-types uuid
 cd ..
 
@@ -2084,13 +2256,13 @@ git push origin main`}</CopyBlock>
           badge={{ icon: '⌨️', label: 'Claude Code' }}
           badgeColor={C.primary}
         >
-          <CopyBlock label="Abrir Claude Code">{`cd contactbook-demo-v2
+          <CopyBlock label="Abrir Claude Code" lang="bash">{`cd contactbook-demo
 claude`}</CopyBlock>
 
           <div style={{ marginTop: 24, marginBottom: 8 }}>
             <StepBadge icon="🧠" label="CLAUDE.md" color={C.accent} />
           </div>
-          <CopyBlock label="Crear CLAUDE.md">{`/init`}</CopyBlock>
+          <CopyBlock label="Crear CLAUDE.md" lang="bash">{`/init`}</CopyBlock>
           <p style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>Si necesitas ajustar el CLAUDE.md generado:</p>
           <CopyBlock>{`Ajusta el CLAUDE.md para que incluya:
 1. La estructura de carpetas hexagonal: domain/ (entities + ports), application/ (services), infrastructure/ (adapters + controllers)
@@ -2131,7 +2303,7 @@ El comando debe ser: npx prettier --write "$CLAUDE_FILE_PATHS" 2>/dev/null || tr
           <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>
             Sal de Claude Code primero con <code style={{ color: C.accent }}>/exit</code>, luego:
           </p>
-          <CopyBlock label="Configurar MCP de GitHub">{`claude mcp add github -s project -- npx @modelcontextprotocol/server-github`}</CopyBlock>
+          <CopyBlock label="Configurar MCP de GitHub" lang="bash">{`claude mcp add github -s project -- npx @modelcontextprotocol/server-github`}</CopyBlock>
         </GuideStep>
 
         {/* Step 4 */}
@@ -2141,7 +2313,7 @@ El comando debe ser: npx prettier --write "$CLAUDE_FILE_PATHS" 2>/dev/null || tr
           badge={{ icon: '🖥️', label: 'Manual' }}
           badgeColor={C.muted}
         >
-          <CopyBlock>{`gh issue create \\
+          <CopyBlock lang="bash">{`gh issue create \\
   --title "Feature: Agregar campo 'favorito' a los contactos" \\
   --body "## Descripción
 Los usuarios necesitan marcar contactos como favoritos para acceso rápido.
@@ -2167,7 +2339,7 @@ Los usuarios necesitan marcar contactos como favoritos para acceso rápido.
           badge={{ icon: '🖥️', label: 'Manual' }}
           badgeColor={C.muted}
         >
-          <CopyBlock>{`git add -A
+          <CopyBlock lang="bash">{`git add -A
 git commit -m "chore: add Claude Code config (CLAUDE.md, skills, hooks, MCP)"
 git push origin main`}</CopyBlock>
         </GuideStep>
@@ -2188,7 +2360,7 @@ git push origin main`}</CopyBlock>
           </h2>
         </FadeIn>
 
-        <CopyBlock label="Abrir Claude Code para el demo">{`cd contactbook-demo-v2
+        <CopyBlock label="Abrir Claude Code para el demo" lang="bash">{`cd contactbook-demo
 claude --dangerously-skip-permissions`}</CopyBlock>
         <p style={{ color: C.danger, fontSize: 12, marginBottom: 32, marginTop: -8 }}>
           ⚠️ --dangerously-skip-permissions es solo para demos. Nunca usarlo en producción.
@@ -2234,7 +2406,7 @@ Sigue los principios SOLID y la estructura de carpetas del CLAUDE.md.`}</CopyBlo
           <p style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>
             Desactiva Plan Mode (<code style={{ color: C.accent }}>Shift+Tab</code>), luego:
           </p>
-          <CopyBlock>{`/test-bdd ContactsService`}</CopyBlock>
+          <CopyBlock lang="bash">{`/test-bdd ContactsService`}</CopyBlock>
         </GuideStep>
 
         {/* Phase 4 */}
@@ -2318,9 +2490,11 @@ El frontend ya está scaffoldeado en /frontend.`}</CopyBlock>
       </Section>
 
       {/* Footer */}
-      <footer style={{ padding: '40px 32px', borderTop: `1px solid ${C.card}`, textAlign: 'center' }}>
-        <p style={{ color: C.muted, fontSize: 13 }}>Claude Code 101 · JavaScript Chapter · Accenture Chile</p>
-        <p style={{ color: `${C.muted}88`, fontSize: 11, marginTop: 8 }}>Navega con ↑↓ o los puntos laterales</p>
+      <footer style={{ padding: '48px 32px 32px', textAlign: 'center' }}>
+        <div style={{ width: 120, height: 2, margin: '0 auto 24px', borderRadius: 1, background: `linear-gradient(90deg, ${C.primary}, ${C.teal})` }} />
+        <p style={{ color: C.muted, fontSize: 13, letterSpacing: '0.5px' }}>Accenture Chile · JavaScript Chapter · Claude Code 101</p>
+        <p style={{ color: `${C.muted}66`, fontSize: 11, marginTop: 12 }}>© 2026 Accenture. All rights reserved.</p>
+        <p style={{ color: `${C.muted}44`, fontSize: 11, marginTop: 16 }}>Navega con ↑↓ o los puntos laterales</p>
       </footer>
     </div>
   );
