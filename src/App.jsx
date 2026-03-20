@@ -34,7 +34,8 @@ const FadeIn = ({ children, delay = 0, direction = "up", className = "" }) => {
   return (
     <div ref={ref} className={className} style={{
       opacity: inView ? 1 : 0, transform: inView ? "none" : dirs[direction],
-      transition: `all 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s`
+      transition: `all 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${delay}s`,
+      height: "100%"
     }}>{children}</div>
   );
 };
@@ -142,7 +143,7 @@ const SectionTitle = ({ icon, children, sub }) => (
 
 const Card = ({ children, accent, delay = 0, style = {} }) => (
   <FadeIn delay={delay}>
-    <div style={{ background: C.card, borderRadius: 12, padding: 24, borderLeft: accent ? `4px solid ${accent}` : "none", position: "relative", overflow: "hidden", ...style }}>
+    <div style={{ background: C.card, borderRadius: 12, padding: 24, borderLeft: accent ? `4px solid ${accent}` : "none", position: "relative", overflow: "hidden", height: "100%", ...style }}>
       {children}
     </div>
   </FadeIn>
